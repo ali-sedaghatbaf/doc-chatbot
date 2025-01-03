@@ -1,8 +1,6 @@
-from operator import add
-from typing import Annotated, Dict, List
+from typing import List
 
 from pydantic import BaseModel, Field
-from typing_extensions import TypedDict
 
 
 class AtomicFact(BaseModel):
@@ -19,27 +17,6 @@ sequences, interpersonal relationships, timelines, etc."""
 
 class Extraction(BaseModel):
     atomic_facts: List[AtomicFact] = Field(description="List of atomic facts")
-
-
-class InputState(TypedDict):
-    question: str
-
-
-class OutputState(TypedDict):
-    answer: str
-    analysis: str
-    previous_actions: List[str]
-
-
-class OverallState(TypedDict):
-    question: str
-    rational_plan: str
-    notebook: str
-    previous_actions: Annotated[List[str], add]
-    check_atomic_facts_queue: List[str]
-    check_chunks_queue: List[str]
-    neighbor_check_queue: List[str]
-    chosen_action: str
 
 
 class Node(BaseModel):

@@ -4,9 +4,33 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from src import ai_agent
+from adapters import doc
+from src.adapters import wiki, wikipedia
+from src.agent import graph_constructor, state_graph
 
 load_dotenv()
+
+
+async def construct_knowledge_graph(doc_name, doc_type):
+
+    if doc_type == "Wikipedia":
+        text = wikipedia.read_doc(doc_name)
+    elif doc_type == "pdf":
+        text = doc.read_doc(doc_name)
+        doc_name = os.path.basename(doc_name)
+    else:
+        text = wiki.read_doc(doc_name)
+
+    await graph_constructor.process_document(
+        text, doc_name, chunk_size=500, chunk_overlap=100
+    )
+
+
+def answer_question(question):
+    response = state_graph.sg_builder.invoke(
+        {"question": question}, {"recursion_limit": 100, "thread_id": 1}
+    )
+    return response["answer"]
 
 
 def write_message(role, content, save=True):
@@ -36,7 +60,7 @@ def handle_submit(message):
 
     # Handle the response
     with st.spinner("Thinking..."):
-        answer = ai_agent.answer_question(message)
+        answer = answer_question(message)
         write_message("assistant", answer)
 
 
@@ -71,7 +95,7 @@ with doc_tab:
     if st.button("Add Document"):
         if doc_name:
             with st.spinner("Transferring data..."):
-                asyncio.run(ai_agent.construct_graph(doc_name, doc_type))
+                asyncio.run(construct_knowledge_graph(doc_name, doc_type))
             st.success("Import successful!")
         else:
             st.error("Document name is required!")

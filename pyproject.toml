@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Ali Sedaghatbaf <ali.sedaghatbaf@klarna.com>"]
 readme = "README.md"
+packages = [{ include = "*", from = "src" }]
 
 [[tool.poetry.source]]
 name = "klarna-proprietary"
@@ -47,6 +48,8 @@ docling-core = "^2.10.0"
 langchain-huggingface = "^0.1.2"
 langchain-milvus = "^0.1.7"
 langchain-experimental = "^0.3.3"
+langgraph-cli = {extras = ["inmem"], version = "^0.1.65"}
+sentence-transformers = "^3.3.1"
 
 
 [build-system]

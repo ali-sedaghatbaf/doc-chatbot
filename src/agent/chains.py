@@ -5,7 +5,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from src.models import (
+from src.agent.models import (
     AnswerReasonOutput,
     AtomicFactOutput,
     ChunkOutput,
@@ -35,6 +35,7 @@ def get_embeddings():
     )
 
 
+@lru_cache
 def construction_chain():
     construction_system = """
     You are now an intelligent assistant tasked with meticulously extracting both key elements and
@@ -76,6 +77,7 @@ def construction_chain():
     return construction_prompt | structured_llm
 
 
+@lru_cache
 def rational_chain():
     rational_plan_system = """As an intelligent assistant, your primary objective is to answer the question by gathering
     supporting facts from a given article. To facilitate this objective, the first step is to make
@@ -106,6 +108,7 @@ def rational_chain():
     return rational_prompt | get_model() | StrOutputParser()
 
 
+@lru_cache
 def initial_nodes_chain():
     initial_node_system = """
     As an intelligent assistant, your primary objective is to answer questions based on information
@@ -154,6 +157,7 @@ def initial_nodes_chain():
     return initial_node_prompt | get_model().with_structured_output(InitialNodes)
 
 
+@lru_cache
 def atomic_fact_chain():
     atomic_fact_check_system = """As an intelligent assistant, your primary objective is to answer questions based on information
     contained within a text. To facilitate this objective, a graph has been created from the text,
@@ -211,6 +215,7 @@ def atomic_fact_chain():
     )
 
 
+@lru_cache
 def chunk_read_chain():
     chunk_read_system_prompt = """As an intelligent assistant, your primary objective is to answer questions based on information
     within a text. To facilitate this objective, a graph has been created from the text, comprising the
@@ -263,6 +268,7 @@ def chunk_read_chain():
     return chunk_read_prompt | get_model().with_structured_output(ChunkOutput)
 
 
+@lru_cache
 def neighbor_select_chain():
     neighbor_select_system_prompt = """
     As an intelligent assistant, your primary objective is to answer questions based on information
@@ -313,6 +319,7 @@ def neighbor_select_chain():
     return neighbor_select_prompt | get_model().with_structured_output(NeighborOutput)
 
 
+@lru_cache
 def answer_reasoning_chain():
     answer_reasoning_system_prompt = """
     As an intelligent assistant, your primary objective is to answer questions based on information
