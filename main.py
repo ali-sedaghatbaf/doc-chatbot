@@ -5,8 +5,9 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from adapters import doc
-from src.adapters import wiki, wikipedia
-from src.agent import graph_constructor, state_graph
+from agent import kg_constructor
+from src.adapters import wiki, wikibase, wikipedia
+from src.agent import state_graph
 
 load_dotenv()
 
@@ -14,20 +15,21 @@ load_dotenv()
 async def construct_knowledge_graph(doc_name, doc_type):
 
     if doc_type == "Wikipedia":
-        text = wikipedia.read_doc(doc_name)
+        doc_content, doc_url = wikipedia.read_doc(doc_name)
     elif doc_type == "pdf":
-        text = doc.read_doc(doc_name)
+        doc_content, doc_url = doc.read_doc(doc_name)
         doc_name = os.path.basename(doc_name)
+    elif doc_type == "Klarna Wiki":
+        doc_content, doc_url = wiki.read_doc(doc_name)
     else:
-        text = wiki.read_doc(doc_name)
-
-    await graph_constructor.process_document(
-        text, doc_name, chunk_size=500, chunk_overlap=100
+        doc_content = wikibase.read_doc(doc_name)
+    await kg_constructor.process_document(
+        doc_content, doc_name, doc_url, chunk_size=500, chunk_overlap=100
     )
 
 
 def answer_question(question):
-    response = state_graph.sg_builder.invoke(
+    response = state_graph.graph.invoke(
         {"question": question}, {"recursion_limit": 100, "thread_id": 1}
     )
     return response["answer"]
@@ -78,7 +80,7 @@ with doc_tab:
     with col2:
         doc_type = st.selectbox(
             "Document Source",
-            ("Klarna Wiki", "Wikipedia"),
+            ("Klarna Wiki", "Klarna Wikibase", "Wikipedia"),
         )
     uploaded_file = st.file_uploader(
         "Upload your text document", type=["pdf", "txt", "docx", "doc", "html"]
