@@ -165,4 +165,4 @@ def read_doc(doc_name):
     wikibase_adapter = WikibaseAdapter()
     doc = wikibase_adapter.get_gov_doc(doc_title=doc_name)
     print(doc)
-    return doc
+    return doc, None

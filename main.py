@@ -17,12 +17,14 @@ async def construct_knowledge_graph(doc_name, doc_type):
     if doc_type == "Wikipedia":
         doc_content, doc_url = wikipedia.read_doc(doc_name)
     elif doc_type == "pdf":
-        doc_content, doc_url = doc.read_doc(doc_name)
-        doc_name = os.path.basename(doc_name)
+        doc_url = doc_name
+        doc_name = os.path.basename(doc_url)
+        doc_content = doc.read_doc(doc_url)        
+        
     elif doc_type == "Klarna Wiki":
         doc_content, doc_url = wiki.read_doc(doc_name)
     else:
-        doc_content = wikibase.read_doc(doc_name)
+        doc_content, doc_url = wikibase.read_doc(doc_name)
     await kg_constructor.process_document(
         doc_content, doc_name, doc_url, chunk_size=500, chunk_overlap=100
     )

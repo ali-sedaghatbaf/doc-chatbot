@@ -69,8 +69,7 @@ def read_doc(doc_name):
         use_bot_login=True,
     ) as session:
         text = session.get_parsed_content(doc_name)
-        with open("data.txt", "w") as f:
-            f.write(text)
+        
         soup = BeautifulSoup(text, "html.parser")
 
         # Remove all elements with the class "_warning"
@@ -129,6 +128,5 @@ def read_doc(doc_name):
         # make sure no consecutive empty lines exist
         text = re.sub(r"\n\s*\n+", "\n\n", text).strip()
 
-        with open("data_striped.txt", "w") as f:
-            f.write(text)
-        return text
+        # TODO: retreive page url
+        return text, None

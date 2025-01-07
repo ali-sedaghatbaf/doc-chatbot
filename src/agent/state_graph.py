@@ -7,9 +7,10 @@ from langgraph.graph import END, START, StateGraph
 from src.agent import graph_explorer as kg_explorer
 from src.agent.states import InputState, OutputState, OverallState
 
+
 def build_state_graph():
     sg_builder = StateGraph(OverallState, input=InputState, output=OutputState)
-    sg_builder.add_node(kg_explorer.rational_plan_node)
+    sg_builder.add_node(kg_explorer.rational_plan_creation)
     sg_builder.add_node(kg_explorer.initial_node_selection)
     sg_builder.add_node(kg_explorer.atomic_fact_check)
     sg_builder.add_node(kg_explorer.chunk_check)
@@ -40,6 +41,7 @@ def build_state_graph():
     )
     graph = sg_builder.compile(checkpointer=checkpointer)
     return graph
+
 
 graph = build_state_graph()
 # graph.get_graph().draw_mermaid_png(output_file_path="langgraph.png")

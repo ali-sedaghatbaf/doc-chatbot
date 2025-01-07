@@ -7,7 +7,7 @@ from src.agent.states import InputState, OutputState, OverallState
 from src.utils import parse_function
 
 
-def rational_plan_node(state: InputState) -> OverallState:
+def rational_plan_creation(state: InputState) -> OverallState:
     rational_plan = chains.rational_chain().invoke({"question": state.get("question")})
 
     print("Step: rational_plan")
