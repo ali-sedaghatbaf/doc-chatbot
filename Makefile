@@ -3,27 +3,27 @@ help:  ## Display this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m\033[0m\n"} /^[\/0-9a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Installation
-install-base: ## Install and upgrade poetry
-	python3 -m pip install -U pip poetry
+install-base: ## Install and upgrade uv
+	python3 -m pip install -U pip uv
 
 install:: install-base ## Install dependencies needed for a production environment
 	@echo "Installing dependencies..."
-	poetry install --only main
+	uv install --only main
 
 install-dev:: install-base ## Install dependencies needed for a local/development environment
 	@echo "Installing dependencies..."
-	poetry install --with dev,test
+	uv install --with dev,test
 
 install-ci: ## Install dependencies needed for a CI environment
 	@echo "Installing dependencies..."
-	poetry install --only dev,test
+	uv install --only dev,test
 
 install-docs: ## Install dependencies needed for publishing documentation to KEP portal
 	@echo "Installing dependencies..."
-	poetry install --only docs
+	uv install --only docs
 
 lock:: ## Lock dependencies
-	poetry lock
+	uv lock
 
 ##@ Clean up
 clean-build: ## Delete the Python build files and folders
@@ -44,7 +44,7 @@ clean-pyc: ## Delete the Python intermediate execution files
 	find . -name '*.ipynb' -exec rm -f {} +
 
 clean-env:  ## Delete python virtual environment
-	poetry env remove --all
+	uv env remove --all
 
 clean: clean-build clean-pyc ## Delete all intermediate files
 
@@ -52,29 +52,30 @@ clean-all: clean clean-env ## Delete all intermediate files and python virtual e
 
 ##@ Development
 run: ## Run the FastAPI server
-	poetry run streamlit run main.py
+	uv run streamlit run main.py
 
 test-unit-list: ## List all tests not marked as functional or integration
-	poetry run pytest -m "not functional and not integration" --collect-only
+	uv run pytest -m "not functional and not integration" --collect-only
 test-integration-list: ## List all integration tests
-	poetry run pytest -m "integration" --collect-only
+	uv run pytest -m "integration" --collect-only
 test-functional-list: ## List all functional tests
-	poetry run pytest -m "functional" --collect-only
+	uv run pytest -m "functional" --collect-only
 test-unit: ## Run tests
-	poetry run pytest -m "not functional and not integration"
+	uv run pytest -m "not functional and not integration"
 
 ##@ Code checks and formatting
 format:: ## Format your code with isort and black
-	poetry run isort .
-	poetry run black .
+	uv run autoflake --remove-all-unused-imports --in-place --recursive .
+	uv run isort .
+	uv run black .
 
 mypy:: ## Run mypy check
-	poetry run mypy
+	uv run mypy .
 
 lint:: ## Run all code checks
-	poetry run flake8 src main.py
-	poetry run black --check .
-	poetry run isort . -c
+	uv run flake8 src main.py
+	uv run black --check .
+	uv run isort . -c
 
 ##@ Check service settings
 grond-validate: ## Validate service metadata
@@ -98,7 +99,7 @@ docker-file-changed: ## Check if Dockerfile has been changed
 
 ##@ Documentation
 docs-to-kep: ## Update API documentation in KEP portal
-	KEP_PORTAL_USERNAME=$(KEP_PORTAL_USERNAME) KEP_PORTAL_PASSWORD=$(KEP_PORTAL_PASSWORD) poetry run python scripts/docs_to_kep.py
+	KEP_PORTAL_USERNAME=$(KEP_PORTAL_USERNAME) KEP_PORTAL_PASSWORD=$(KEP_PORTAL_PASSWORD) uv run python scripts/docs_to_kep.py
 
 ##@ Build/Artifactory
 # Artifactory

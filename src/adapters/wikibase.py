@@ -1,4 +1,3 @@
-import json
 import os
 
 from SPARQLWrapper import JSON, SPARQLWrapper

@@ -1,5 +1,7 @@
+import json
 import os
 from functools import lru_cache
+from typing import List
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -8,15 +10,17 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from src.agent.models import (
     AnswerReasonOutput,
     AtomicFactOutput,
+    Chunk,
     ChunkOutput,
     Extraction,
     InitialNodes,
     NeighborOutput,
 )
+from src.agent.openai_pilot import OpenAIResponsesPilotClient
 
 
 @lru_cache
-def get_model():
+def get_gpt4o_model():
     return ChatOpenAI(
         model="gpt-4o-2024-08-06",
         temperature=0,
@@ -27,12 +31,141 @@ def get_model():
 
 
 @lru_cache
-def get_embeddings():
+def get_gpt4_vision_model():
+    return ChatOpenAI(
+        model="gpt-4-vision",
+        temperature=0,
+        base_url=os.environ["AI_GATEWAY_BASE_URL"],
+        api_key=os.environ["AI_GATEWAY_API_KEY"],
+    )
+
+
+@lru_cache
+def get_openai_embeddings():
     return OpenAIEmbeddings(
         model="text-embedding-3-small",
         base_url=os.environ["AI_GATEWAY_BASE_URL"],
         api_key=os.environ["AI_GATEWAY_API_KEY"],
     )
+
+
+@lru_cache
+def chunking_chain_with_responses_api():
+    client = OpenAIResponsesPilotClient(
+        api_key=os.environ["OPENAI_API_KEY"],
+    )
+
+    def process_image(image: str, page_number: int) -> List[Chunk]:
+        # System and human prompts
+        messages = [
+            {
+                "role": "system",
+                "content": """
+                You are now an intelligent assistant tasked with analyzing an image and extracting chunks of text from it in markdown format.
+                - Ensure markdown text formatting for extracted text is applied properly by analyzing the image.
+                - Strictly do not change any content in the original extracted text while applying markdown formatting and do not repeat the extracted text.
+                - Each paragraph, figure, table, page header, and key value pair should be extracted as a separate chunk.
+                """,
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"Use the following format to extract chunks from the image provided which is a screenshot of page {page_number}",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/png;base64,{image}",
+                    },
+                ],
+            },
+        ]
+        schema = Chunk.model_json_schema()
+        schema["additionalProperties"] = False
+        # Create the response using the client
+        response = client.beta.responses.create(
+            model="gpt-4o-2024-08-06",  # Adjust model as needed for vision capabilities
+            input=messages,
+            response_format={
+                "name": "chunks",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "chunks": {
+                            "type": "array",
+                            "description": "List of chunks",
+                            "items": {"$ref": "#/$defs/chunk"},
+                        }
+                    },
+                    "$defs": {
+                        "chunk": {
+                            "type": "object",
+                            "description": "A chunk of text with associated metadata.",
+                            "properties": {
+                                "text": {
+                                    "type": "string",
+                                    "description": "Text of the chunk.",
+                                },
+                                "box": {
+                                    "type": "array",
+                                    "description": "Bounding box of the chunk.",
+                                    "items": {"type": "number"},
+                                },
+                                "type": {
+                                    "type": "string",
+                                    "description": "Type of the chunk.",
+                                    "enum": [
+                                        "heading",
+                                        "table",
+                                        "figure",
+                                        "page_header",
+                                        "key_value",
+                                        "list",
+                                        "equation",
+                                        "page_footer",
+                                        "paragraph",
+                                    ],
+                                },
+                                "page_number": {
+                                    "type": "number",
+                                    "description": "Page number of the chunk.",
+                                },
+                            },
+                            "required": ["text", "box", "type", "page_number"],
+                            "additionalProperties": False,
+                        }
+                    },
+                    "required": ["chunks"],
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            },
+        )
+        output = response.get("output")[0].get("content")[0].get("text")
+        chunks = json.loads(output).get("chunks")
+
+        return chunks
+
+    return process_image
+
+
+@lru_cache
+def chunking_chain():
+    chunking_system = """
+    You are now an intelligent assistant tasked with analyzing an image and extracting chunks of text from it in markdown format.
+    - Ensure markdown text formatting for extracted text is applied properly by analyzing the image.
+    - Strictly do not change any content in the original extracted text while applying markdown formatting and do not repeat the extracted text.
+    - Each paragraph, figure, table, page header, and key value pair should be extracted as a separate chunk.
+    """
+    chunking_human = """Use the following format to extract chunks from the image {image} which is a screensshot of page {page_number}"""
+    chunking_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", chunking_system),
+            ("human", chunking_human),
+        ]
+    )
+    return chunking_prompt | get_gpt4o_model().with_structured_output(Chunk)
 
 
 @lru_cache
@@ -54,6 +187,7 @@ def construction_chain():
     She to actual names).
     4. Ensure that the key elements and atomic facts you extract are presented in the same language as
     the original text (e.g., English or Chinese).
+    5. Ensure that the key elements are in lowercase unless they are proper nouns.
     """
 
     construction_human = """Use the given format to extract information from the 
@@ -72,7 +206,7 @@ def construction_chain():
         ]
     )
 
-    structured_llm = get_model().with_structured_output(Extraction)
+    structured_llm = get_gpt4o_model().with_structured_output(Extraction)
 
     return construction_prompt | structured_llm
 
@@ -105,7 +239,7 @@ def rational_chain():
         ]
     )
 
-    return rational_prompt | get_model() | StrOutputParser()
+    return rational_prompt | get_gpt4o_model() | StrOutputParser()
 
 
 @lru_cache
@@ -147,14 +281,14 @@ def initial_nodes_chain():
                 "human",
                 (
                     """Question: {question}
-    Plan: {rational_plan}
-    Nodes: {nodes}"""
+                        Plan: {rational_plan}
+                        Nodes: {nodes}"""
                 ),
             ),
         ]
     )
 
-    return initial_node_prompt | get_model().with_structured_output(InitialNodes)
+    return initial_node_prompt | get_gpt4o_model().with_structured_output(InitialNodes)
 
 
 @lru_cache
@@ -210,7 +344,7 @@ def atomic_fact_chain():
         ]
     )
 
-    return atomic_fact_check_prompt | get_model().with_structured_output(
+    return atomic_fact_check_prompt | get_gpt4o_model().with_structured_output(
         AtomicFactOutput
     )
 
@@ -259,13 +393,14 @@ def chunk_read_chain():
     Plan: {rational_plan}
     Previous actions: {previous_actions}
     Notebook: {notebook}
-    Chunk: {chunk}"""
+    Chunk: {chunk} 
+    """
                 ),
             ),
         ]
     )
 
-    return chunk_read_prompt | get_model().with_structured_output(ChunkOutput)
+    return chunk_read_prompt | get_gpt4o_model().with_structured_output(ChunkOutput)
 
 
 @lru_cache
@@ -316,7 +451,9 @@ def neighbor_select_chain():
         ]
     )
 
-    return neighbor_select_prompt | get_model().with_structured_output(NeighborOutput)
+    return neighbor_select_prompt | get_gpt4o_model().with_structured_output(
+        NeighborOutput
+    )
 
 
 @lru_cache
@@ -379,6 +516,6 @@ def answer_reasoning_chain():
         ]
     )
 
-    return answer_reasoning_prompt | get_model().with_structured_output(
+    return answer_reasoning_prompt | get_gpt4o_model().with_structured_output(
         AnswerReasonOutput
     )

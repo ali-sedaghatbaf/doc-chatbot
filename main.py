@@ -4,10 +4,8 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from adapters import doc
-from agent import kg_constructor
-from src.adapters import wiki, wikibase, wikipedia
-from src.agent import state_graph
+from src.adapters import doc, wiki, wikibase, wikipedia
+from src.agent import kg_constructor, state_graph
 
 load_dotenv()
 
@@ -15,26 +13,31 @@ load_dotenv()
 async def construct_knowledge_graph(doc_name, doc_type):
 
     if doc_type == "Wikipedia":
-        doc_content, doc_url = wikipedia.read_doc(doc_name)
+        doc_images, doc_url = wikipedia.read_doc(doc_name)
     elif doc_type == "pdf":
         doc_url = doc_name
         doc_name = os.path.basename(doc_url)
-        doc_content = doc.read_doc(doc_url)        
-        
+        doc_images = doc.read_doc(doc_url)
+
     elif doc_type == "Klarna Wiki":
-        doc_content, doc_url = wiki.read_doc(doc_name)
+        doc_images, doc_url = wiki.read_doc(doc_name)
     else:
-        doc_content, doc_url = wikibase.read_doc(doc_name)
-    await kg_constructor.process_document(
-        doc_content, doc_name, doc_url, chunk_size=500, chunk_overlap=100
-    )
+        doc_images, doc_url = wikibase.read_doc(doc_name)
+    await kg_constructor.process_document(doc_images, doc_name, doc_url)
 
 
 def answer_question(question):
     response = state_graph.graph.invoke(
         {"question": question}, {"recursion_limit": 100, "thread_id": 1}
     )
-    return response["answer"]
+    response_text = response.get("answer", "")
+    reponse_citations = response.get("citations", {})
+
+    if reponse_citations:
+        response_text += "\n\n\n**References:**"
+        for document_name, document_url in response_citations.items():
+            response_text += f"\n\n[{document_name}]({document_url})"
+    return response_text
 
 
 def write_message(role, content, save=True):

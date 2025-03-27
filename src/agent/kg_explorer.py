@@ -1,5 +1,6 @@
-from functools import lru_cache
-from typing import Dict, List, Literal
+from typing import Dict, List
+
+from rank_bm25 import BM25Okapi
 
 from src.adapters import neo4j
 from src.agent import chains
@@ -18,12 +19,24 @@ def rational_plan_creation(state: InputState) -> OverallState:
     }
 
 
-def get_potential_nodes(question: str) -> List[str]:
-    data = neo4j.get_vector().similarity_search(question, k=50)
-    return [el.page_content for el in data]
+def get_potential_nodes(question: str, count=10) -> List[str]:
+
+    similarity_based_data = neo4j.retrieve_key_elements_by_similarity(question, count)
+    all_keys = neo4j.get_all_key_elements()
+    bm25 = BM25Okapi(all_keys)
+    bm25_scores = bm25.get_scores(question.split())
+    bm25_based_data = sorted(
+        zip(all_keys, bm25_scores), key=lambda item: item[1], reverse=True
+    )[:count]
+    similarity_based_keys = [key for key, _ in similarity_based_data]
+    bm25_based_keys = [key for key, _ in bm25_based_data]
+    print(f"Similarity based keys: {similarity_based_keys}")
+    print(f"BM25 based keys: {bm25_based_keys}")
+    return list(set(similarity_based_keys + bm25_based_keys))
 
 
 def initial_node_selection(state: OverallState) -> OverallState:
+
     potential_nodes = get_potential_nodes(state.get("question"))
     initial_nodes = chains.initial_nodes_chain().invoke(
         {
@@ -75,6 +88,7 @@ def get_neighbors_by_key_element(key_elements):
 
 
 def atomic_fact_check(state: OverallState) -> OverallState:
+
     atomic_facts = get_atomic_facts(state.get("check_atomic_facts_queue"))
     print("-" * 20)
     print(f"Step: atomic_fact_check")
@@ -140,11 +154,23 @@ def get_chunk(chunk_id: str) -> List[Dict[str, str]]:
         """
     MATCH (c:Chunk)
     WHERE c.id = $chunk_id
-    RETURN c.id AS chunk_id, c.text AS text
+    RETURN c.text AS text
     """,
         params={"chunk_id": chunk_id},
     )
     return data
+
+
+def get_document(chunk_id: str) -> str:
+    doc = neo4j.get_graph().query(
+        """
+    MATCH (c:Chunk)<-[:HAS_CHUNK]-(d:Document)
+    WHERE c.id = $chunk_id
+    RETURN d.url AS url, d.id AS name
+    """,
+        params={"chunk_id": chunk_id},
+    )
+    return doc
 
 
 def chunk_check(state: OverallState) -> OverallState:
@@ -193,6 +219,11 @@ def chunk_check(state: OverallState) -> OverallState:
             response["neighbor_check_queue"] = neighbors
 
     response["check_chunks_queue"] = check_chunks_queue
+
+    context = state.get("context", [])
+    context.append(chunk_id)
+    response["context"] = context
+
     return response
 
 
@@ -234,6 +265,12 @@ def answer_reasoning(state: OverallState) -> OutputState:
     final_answer = chains.answer_reasoning_chain().invoke(
         {"question": state.get("question"), "notebook": state.get("notebook")}
     )
+    context = state.get("context")
+    citations = {}
+    for chunk_id in context:
+        doc = get_document(chunk_id)[0]
+
+        citations[doc["name"]] = doc["url"]
 
     print(f"Final answer: {final_answer.final_answer}")
     print(f"\nNotebook content: {state.get('notebook')}")
@@ -241,37 +278,5 @@ def answer_reasoning(state: OverallState) -> OutputState:
         "answer": final_answer.final_answer,
         "analysis": final_answer.analyze,
         "previous_actions": ["answer_reasoning"],
+        "citations": citations,
     }
-
-
-def atomic_fact_condition(
-    state: OverallState,
-) -> Literal["neighbor_select", "chunk_check"]:
-    if state.get("chosen_action") == "stop_and_read_neighbor":
-        return "neighbor_select"
-    elif state.get("chosen_action") == "read_chunk":
-        return "chunk_check"
-
-
-def chunk_condition(
-    state: OverallState,
-) -> Literal["answer_reasoning", "chunk_check", "neighbor_select"]:
-    if state.get("chosen_action") == "termination":
-        return "answer_reasoning"
-    elif state.get("chosen_action") in [
-        "read_subsequent_chunk",
-        "read_previous_chunk",
-        "search_more",
-    ]:
-        return "chunk_check"
-    elif state.get("chosen_action") == "search_neighbor":
-        return "neighbor_select"
-
-
-def neighbor_condition(
-    state: OverallState,
-) -> Literal["answer_reasoning", "atomic_fact_check"]:
-    if state.get("chosen_action") == "termination":
-        return "answer_reasoning"
-    elif state.get("chosen_action") == "read_neighbor_node":
-        return "atomic_fact_check"
