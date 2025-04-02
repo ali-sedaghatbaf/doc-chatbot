@@ -3,8 +3,8 @@ from typing import Literal
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from src.agent import kg_explorer
-from src.agent.states import InputState, OutputState, OverallState
+from src.reader_agent import kg_explorer
+from src.reader_agent.states import InputState, OutputState, OverallState
 
 
 def build_state_graph():
@@ -75,5 +75,6 @@ def neighbor_condition(
         return "atomic_fact_check"
 
 
-graph = build_state_graph()
+reader_graph = build_state_graph()
+reader_graph.name = "reader_agent"
 # graph.get_graph().draw_mermaid_png(output_file_path="langgraph.png")

@@ -171,3 +171,5 @@ cython_debug/
 .pypirc
 .langgraph_api/
 temp_dir/
+.env
+data/

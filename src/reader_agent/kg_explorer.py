@@ -3,8 +3,8 @@ from typing import Dict, List
 from rank_bm25 import BM25Okapi
 
 from src.adapters import neo4j
-from src.agent import chains
-from src.agent.states import InputState, OutputState, OverallState
+from src.reader_agent import chains
+from src.reader_agent.states import InputState, OutputState, OverallState
 from src.utils import parse_function
 
 

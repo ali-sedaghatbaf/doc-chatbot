@@ -3,7 +3,7 @@ from functools import lru_cache
 from langchain_community.graphs import Neo4jGraph
 from langchain_community.vectorstores import Neo4jVector
 
-from src.agent import chains
+from src.reader_agent import chains
 
 
 @lru_cache

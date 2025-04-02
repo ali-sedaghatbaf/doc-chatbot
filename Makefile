@@ -54,6 +54,9 @@ clean-all: clean clean-env ## Delete all intermediate files and python virtual e
 run: ## Run the FastAPI server
 	uv run streamlit run main.py
 
+run-api: 
+	uv run langgraph dev
+
 test-unit-list: ## List all tests not marked as functional or integration
 	uv run pytest -m "not functional and not integration" --collect-only
 test-integration-list: ## List all integration tests

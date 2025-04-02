@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -11,18 +11,29 @@ class Polygon(BaseModel):
     p3: Tuple[float, float] = Field(..., description="Third point (x3, y3)")
     p4: Tuple[float, float] = Field(..., description="Fourth point (x4, y4)")
 
+    def to_list(self) -> List[float]:
+        """Convert polygon points to a flat list of coordinates."""
+        return [
+            *self.p1,  # x1, y1
+            *self.p2,  # x2, y2
+            *self.p3,  # x3, y3
+            *self.p4,  # x4, y4
+        ]
+
+    class Config:
+        json_encoders = {tuple: list}  # Convert tuples to lists for JSON serialization
+
 
 class Block(BaseModel):
-    block_id: str = Field(..., description="The id of the block")
-    block_text: str = Field(..., description="The text of the block")
-    block_type: Literal[
+    id: str = Field(..., description="The id of the block")
+    text: str = Field(..., description="The text of the block")
+    type: Literal[
         "Line",
         "Span",
         "FigureGroup",
         "TableGroup",
         "ListGroup",
         "PictureGroup",
-        "Page",
         "Caption",
         "Code",
         "Figure",
@@ -39,26 +50,20 @@ class Block(BaseModel):
         "Table",
         "Text",
         "TableOfContents",
-        "Document",
     ] = Field(..., description="The type of the block")
-    block_position: List[int] = Field(..., description="The position of the block")
+    position: Polygon = Field(..., description="The position of the block")
 
 
 class Page(BaseModel):
-    page_id: str = Field(..., description="The id of the page")
-    page_number: int = Field(..., description="The page number of the page")
-    page_blocks: List[Block] = Field(..., description="The blocks of the page")
-    page_position: List[int] = Field(..., description="The position of the page")
-    page_image: bytes = Field(..., description="The image of the page")
+    id: str = Field(..., description="The id of the page")
+    number: int = Field(..., description="The page number of the page")
+    blocks: List[Block] = Field(..., description="The blocks of the page")
 
 
 class Document(BaseModel):
-    document_name: str = Field(..., description="The name of the document")
-    document_address: str = Field(..., description="The address of the document")
-    document_pages: List[Page] = Field(..., description="The pages of the document")
-    document_metadata: Dict[str, Any] = Field(
-        ..., description="The metadata of the document"
-    )
+    name: str = Field(..., description="The name of the document")
+    address: str = Field(..., description="The address of the document")
+    pages: List[Page] = Field(..., description="The pages of the document")
 
     class Config:
         min_anystr_length = 1

@@ -4,13 +4,11 @@ import os
 import re
 from difflib import SequenceMatcher
 from hashlib import md5
-from typing import Dict, List
+from typing import List
 
-import cv2
-import layoutparser as lp
-import numpy as np
 import pandas as pd
 import pymupdf as fitz
+from bs4 import BeautifulSoup
 from klarna_wiki_api.sessions import KlarnaWikiSession
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -58,40 +56,6 @@ def pdf_to_image(pdf_path: str) -> List[bytes]:
             images.append(png_data)
 
     return images
-
-
-@lru_cache(maxsize=None)
-def get_layout_model():
-    return lp.Detectron2LayoutModel(
-        "lp://PubLayNet/faster_rcnn_R_50_FPN_3x/config",
-        extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.8],
-        label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
-    )
-
-
-def parse_image_layout(image_data: bytes) -> Dict[str, List[lp.Layout]]:
-
-    nparr = np.frombuffer(image_data, np.uint8)
-
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-    image = image[..., ::-1]
-
-    model = get_layout_model()
-    layout = model.detect(image)
-    text_blocks = lp.Layout([b for b in layout if b.type == "Text"])
-    figure_blocks = lp.Layout([b for b in layout if b.type == "Figure"])
-    text_blocks = lp.Layout(
-        [b for b in text_blocks if not any(b.is_in(b_fig) for b_fig in figure_blocks)]
-    )
-    ocr_agent = lp.TesseractAgent(languages="eng")
-    for block in text_blocks:
-        segment_image = block.pad(left=5, right=5, top=5, bottom=5).crop_image(image)
-
-        text = ocr_agent.detect(segment_image)
-        block.set(text=text, inplace=True)
-
-    return layout
 
 
 def webpage_to_image(url: str, width: int = 1920) -> List[bytes]:
@@ -169,7 +133,8 @@ def wiki_page_to_image(
 
         # Take screenshot
         screenshot = driver.get_screenshot_as_png()
-
+        with open("screenshot.png", "wb") as f:
+            f.write(screenshot)
         return [screenshot]
 
 
@@ -316,3 +281,183 @@ def parse_function(input_str):
         return {"function_name": function_name, "arguments": arguments}
     else:
         return None
+
+
+def json_to_md(data, level=0):
+    """
+    Convert JSON/dict data to markdown format.
+
+    Args:
+        data: JSON/dict data to convert
+        level: Current indentation level (default: 0)
+
+    Returns:
+        str: Markdown formatted string
+    """
+    indent = "  " * level
+    md = ""
+
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, (dict, list)):
+                md += f"{indent}- **{key}:**\n{json_to_md(value, level + 1)}"
+            else:
+                md += f"{indent}- **{key}:** {value}\n"
+
+    elif isinstance(data, list):
+        for item in data:
+            if isinstance(item, (dict, list)):
+                md += f"{indent}- \n{json_to_md(item, level + 1)}"
+            else:
+                md += f"{indent}- {item}\n"
+
+    else:
+        md += f"{indent}{data}\n"
+
+    return md
+
+
+def html_to_md(html_content: str) -> str:
+    """
+    Convert HTML content to Markdown format.
+
+    Args:
+        html_content: HTML string to convert
+
+    Returns:
+        str: Markdown formatted string
+    """
+    soup = BeautifulSoup(html_content, "html.parser")
+
+    # Remove script and style elements
+    for script in soup(["script", "style"]):
+        script.decompose()
+
+    # Handle headings
+    for i in range(6, 0, -1):
+        for heading in soup.find_all(f"h{i}"):
+            heading.replace_with(f"{'#' * i} {heading.get_text()}\n")
+
+    # Handle links
+    for link in soup.find_all("a"):
+        href = link.get("href", "")
+        text = link.get_text()
+        link.replace_with(f"[{text}]({href})")
+
+    # Handle images
+    for img in soup.find_all("img"):
+        alt = img.get("alt", "")
+        src = img.get("src", "")
+        img.replace_with(f"![{alt}]({src})")
+
+    # Handle lists
+    for ul in soup.find_all("ul"):
+        for li in ul.find_all("li"):
+            li.replace_with(f"- {li.get_text()}\n")
+
+    for ol in soup.find_all("ol"):
+        for i, li in enumerate(ol.find_all("li"), 1):
+            li.replace_with(f"{i}. {li.get_text()}\n")
+
+    # Handle emphasis
+    for strong in soup.find_all(["strong", "b"]):
+        strong.replace_with(f"**{strong.get_text()}**")
+
+    for em in soup.find_all(["em", "i"]):
+        em.replace_with(f"*{em.get_text()}*")
+
+    # Handle code blocks
+    for pre in soup.find_all("pre"):
+        code = pre.find("code")
+        if code:
+            lang = (
+                code.get("class", [""])[0].replace("language-", "")
+                if code.get("class")
+                else ""
+            )
+            pre.replace_with(f"```{lang}\n{code.get_text()}\n```\n")
+
+    # Handle inline code
+    for code in soup.find_all("code"):
+        if code.parent.name != "pre":
+            code.replace_with(f"`{code.get_text()}`")
+
+    # Handle blockquotes
+    for quote in soup.find_all("blockquote"):
+        lines = quote.get_text().strip().split("\n")
+        quote.replace_with("> " + "\n> ".join(lines) + "\n")
+
+    # Handle tables
+    for table in soup.find_all("table"):
+        md_table = []
+        # Headers
+        headers = []
+        for th in table.find_all("th"):
+            headers.append(th.get_text().strip())
+        if headers:
+            md_table.append("| " + " | ".join(headers) + " |")
+            md_table.append("| " + " | ".join(["---"] * len(headers)) + " |")
+
+        # Rows
+        for tr in table.find_all("tr"):
+            cells = []
+            for td in tr.find_all("td"):
+                cells.append(td.get_text().strip())
+            if cells:
+                md_table.append("| " + " | ".join(cells) + " |")
+
+        table.replace_with("\n".join(md_table) + "\n")
+
+    # Get the text and clean it up
+    text = soup.get_text()
+
+    # Clean up extra whitespace
+    text = re.sub(r"\n\s*\n", "\n\n", text)
+    text = re.sub(r" +", " ", text)
+
+    return text.strip()
+
+
+def compare_header_levels(header1: str, header2: str) -> int:
+    """
+    Compare the levels of two markdown headers.
+    Returns:
+        -1 if header1 is higher level than header2
+         0 if headers are same level
+         1 if header1 is lower level than header2
+
+    Examples:
+        >>> compare_header_levels("# Header", "## Subheader")
+        -1
+        >>> compare_header_levels("### Section", "### Another Section")
+        0
+        >>> compare_header_levels("#### Subsection", "## Section")
+        1
+    """
+    # Count leading '#' characters to determine level
+    level1 = len(header1) - len(header1.lstrip("#"))
+    level2 = len(header2) - len(header2.lstrip("#"))
+
+    if level1 < level2:
+        return -1
+    elif level1 > level2:
+        return 1
+    else:
+        return 0
+
+
+# Alternative version that returns the actual levels:
+def get_header_levels(header1: str, header2: str) -> tuple[int, int]:
+    """
+    Get the levels of two markdown headers.
+    Returns tuple of (header1_level, header2_level)
+
+    Examples:
+        >>> get_header_levels("# Header", "## Subheader")
+        (1, 2)
+        >>> get_header_levels("### Section", "### Another Section")
+        (3, 3)
+    """
+    level1 = len(header1) - len(header1.lstrip("#"))
+    level2 = len(header2) - len(header2.lstrip("#"))
+    return level1, level2

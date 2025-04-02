@@ -4,8 +4,8 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from src.adapters import doc, wiki, wikibase, wikipedia
-from src.agent import kg_constructor, state_graph
+from src.adapters import file_system, wiki, wikibase, wikipedia
+from src.reader_agent import kg_constructor, state_graph
 
 load_dotenv()
 
@@ -13,17 +13,15 @@ load_dotenv()
 async def construct_knowledge_graph(doc_name, doc_type):
 
     if doc_type == "Wikipedia":
-        doc_images, doc_url = wikipedia.read_doc(doc_name)
+        doc = wikipedia.read_doc(doc_name)
     elif doc_type == "pdf":
-        doc_url = doc_name
-        doc_name = os.path.basename(doc_url)
-        doc_images = doc.read_doc(doc_url)
+        doc = file_system.read_doc(doc_name)
 
     elif doc_type == "Klarna Wiki":
-        doc_images, doc_url = wiki.read_doc(doc_name)
+        doc = wiki.read_doc(doc_name)
     else:
-        doc_images, doc_url = wikibase.read_doc(doc_name)
-    await kg_constructor.process_document(doc_images, doc_name, doc_url)
+        doc = wikibase.read_doc(doc_name)
+    await kg_constructor.process_document(doc)
 
 
 def answer_question(question):

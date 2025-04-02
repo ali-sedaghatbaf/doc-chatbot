@@ -43,6 +43,7 @@ dependencies = [
     "selenium>=4.29.0",
     "pymupdf>=1.25.3",
     "layoutparser>=0.3.4",
+    "marker-pdf>=1.6.2",
 ]
 
 [dependency-groups]
