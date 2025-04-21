@@ -6,7 +6,6 @@ authors = [{ name = "Ali Sedaghatbaf", email = "ali.sedaghatbaf@klarna.com" }]
 requires-python = "~=3.11"
 readme = "README.md"
 dependencies = [
-    "klarna-wiki-api>=0.12,<0.13",
     "neo4j>=5.26.0,<6",
     "langchain-core>=0.3.17,<0.4",
     "langchain-openai>=0.2.8,<0.3",
@@ -49,20 +48,12 @@ dependencies = [
 [dependency-groups]
 dev = ["autoflake>=2.3.1,<3"]
 
-[tool.uv]
 
-[[tool.uv.index]]
-name = "klarna-proprietary"
-url = "https://artifactory.klarna.net/artifactory/api/pypi/v-pypi-production/simple"
-explicit = true
 
 [[tool.uv.index]]
 name = "pytorch_cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
-
-[tool.uv.sources]
-klarna-wiki-api = { index = "klarna-proprietary" }
 
 
 
